@@ -1,13 +1,11 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend
 } from 'recharts'
+import { generateSuggestions } from './lib/suggest'
 
-// =====================
-// DADOS ESTÁTICOS (DEMO)
-// =====================
-// Índices/Gráficos
+// ===== DEMO dos gráficos mantidos =====
 const desempenhoGeral = 74
 const variacaoSemanal = +5
 const performanceHistory = [
@@ -30,41 +28,47 @@ const distribuicaoDezenas = [
   { faixa: '51-60', qtd: 8 },
 ]
 
-// Último sorteio (mock para visualização imediata)
-const ultimoConcursoDemo = {
-  numero: 2930,
-  data: '12/10/2025',
-  dezenas: ['03','07','14','28','44','58'],
-  status: 'Sincronizado (demo)'
-}
-
-// Sugestões de jogos (DEMO – lógica simples só para aparecer)
-const sugestoesDemo = [
-  ['03','12','19','28','44','58'],
-  ['07','11','23','31','42','55'],
-  ['01','16','24','33','47','60'],
-  ['04','18','25','36','41','53'],
-  ['05','09','22','30','48','57'],
-  ['06','14','21','34','45','59'],
-]
-
-const box = {
-  border: '1px solid #e5e7eb',
-  borderRadius: 12,
-  background: '#fff',
-  padding: 16,
-  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-}
+// estilos inline simples
+const box = { border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff', padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }
 const h2 = { fontSize: 18, margin: 0, marginBottom: 8, fontWeight: 600 }
-const p = { margin: '6px 0', color: '#4b5563', fontSize: 14 }
-const chip = (bg, color='#fff') => ({
-  display: 'inline-block', padding: '4px 8px', borderRadius: 8, fontWeight: 700, background: bg, color
-})
+const p  = { margin: '6px 0', color: '#4b5563', fontSize: 14 }
+const chip = (bg, color='#fff') => ({ display: 'inline-block', padding: '4px 8px', borderRadius: 8, fontWeight: 700, background: bg, color })
 
 export default function App() {
-  const [ultimaAtualizacao] = useState(
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState(
     new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
   )
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState(null)
+  const [concurso, setConcurso] = useState(null)   // {numero, dataApuracao, dezenas:[]}
+  const [sugestoes, setSugestoes] = useState([])
+
+  // busca real via API interna
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true); setErro(null)
+        const res = await fetch('/api/mega', { cache: 'no-store' })
+        const data = await res.json()
+        if (data?.ok) {
+          const dezenas = (data.dezenas || []).map(x => String(x).padStart(2,'0'))
+          setConcurso({ numero: data.numero, dataApuracao: data.dataApuracao || null, dezenas })
+          setSugestoes(generateSuggestions({ ultimo: dezenas.map(d => Number(d)), seed: data.numero }))
+        } else {
+          setErro('Não foi possível sincronizar agora. Mostrando sugestões base.')
+          setConcurso(null)
+          setSugestoes(generateSuggestions({ ultimo: [], seed: 1 }))
+        }
+      } catch (e) {
+        setErro('Falha na sincronização. Mostrando sugestões base.')
+        setConcurso(null)
+        setSugestoes(generateSuggestions({ ultimo: [], seed: 2 }))
+      } finally {
+        setLoading(false)
+        setUltimaAtualizacao(new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }))
+      }
+    })()
+  }, [])
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
@@ -76,7 +80,14 @@ export default function App() {
         </div>
       </div>
 
-      {/* 1) Desempenho acumulado */}
+      {/* Alerta de sincronização */}
+      {erro && (
+        <div style={{ ...box, borderColor: '#fcd34d', background: '#fffbeb', color: '#92400e', marginBottom: 12 }}>
+          ⚠️ {erro}
+        </div>
+      )}
+
+      {/* 1) Desempenho */}
       <div style={{ ...box, background: 'linear-gradient(90deg,#16a34a,#059669)', color: '#fff', textAlign: 'center' }}>
         <h2 style={{ ...h2, color: '#fff' }}>Índice de Desempenho Acumulado</h2>
         <p style={{ ...p, color: 'rgba(255,255,255,0.9)' }}>
@@ -146,30 +157,38 @@ export default function App() {
         </div>
       </div>
 
-      {/* 5) NOVO — Último sorteio (demo) */}
+      {/* 5) Último sorteio (real) */}
       <div style={{ ...box, marginTop: 16 }}>
-        <h2 style={h2}>Último Sorteio (exemplo)</h2>
-        <p style={p}>Quando ligarmos a sincronização, estes dados virão da fonte oficial.</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-          <div style={chip('#0ea5e9')}>Concurso {ultimoConcursoDemo.numero}</div>
-          <div style={{ fontSize: 14, color: '#374151' }}><strong>Data:</strong> {ultimoConcursoDemo.data}</div>
-          <div style={chip('#10b981')}>{ultimoConcursoDemo.status}</div>
-        </div>
-        <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {ultimoConcursoDemo.dezenas.map((d) => (
-            <div key={d} style={{ padding: '8px 12px', borderRadius: 10, background: '#f3f4f6', fontWeight: 700 }}>
-              {d}
+        <h2 style={h2}>Último Sorteio</h2>
+        <p style={p}>Dados obtidos automaticamente da fonte oficial (com fallback).</p>
+        {loading ? (
+          <div style={{ color: '#374151' }}>Carregando…</div>
+        ) : concurso ? (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+              <div style={chip('#0ea5e9')}>Concurso {concurso.numero}</div>
+              {concurso.dataApuracao && <div style={{ fontSize: 14, color: '#374151' }}><strong>Data:</strong> {concurso.dataApuracao}</div>}
+              <div style={chip('#10b981')}>Sincronizado</div>
             </div>
-          ))}
-        </div>
+            <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {concurso.dezenas.map((d) => (
+                <div key={d} style={{ padding: '8px 12px', borderRadius: 10, background: '#f3f4f6', fontWeight: 700 }}>
+                  {d}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ color: '#6b7280' }}>Sem dados no momento.</div>
+        )}
       </div>
 
-      {/* 6) NOVO — Sugestões de jogos (demo) */}
+      {/* 6) Sugestões (regras) */}
       <div style={{ ...box, marginTop: 16 }}>
-        <h2 style={h2}>Sugestões de Jogos (demo)</h2>
-        <p style={p}>Exemplos de 6 apostas baseadas no equilíbrio de faixas e pares/ímpares.</p>
+        <h2 style={h2}>Sugestões de Jogos</h2>
+        <p style={p}>Combinações balanceadas por faixas e pares/ímpares, evitando repetir o último sorteio.</p>
         <ol style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 8 }}>
-          {sugestoesDemo.map((jogo, idx) => (
+          {sugestoes.map((jogo, idx) => (
             <li key={idx} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <strong style={{ width: 28 }}>#{String(idx+1).padStart(2,'0')}</strong>
               {jogo.map((d) => (
@@ -181,7 +200,7 @@ export default function App() {
           ))}
         </ol>
         <p style={{ ...p, fontSize: 12, marginTop: 8 }}>
-          *Somente para visualização. Depois ativamos a geração “valendo” e a sincronização real.
+          *Use como inspiração; não garante prêmio.
         </p>
       </div>
     </div>
