@@ -1,6 +1,7 @@
 // src/lib/storage.js
 const K_JOGOS = 'ms_jogos_por_concurso'   // { [numeroConcurso]: [ [6 dezenas], ... ] }
 const K_HIST  = 'ms_historico'            // [ { concurso, data, jogos, mediaAcertos, desempenho }, ... ]
+const K_MANUAL = 'ms_resultado_manual'    // { numero, dataApuracao, dezenas }
 
 function read(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback }
@@ -26,6 +27,17 @@ export function upsertHistorico(entry) {
   const idx = hist.findIndex(h => h.concurso === entry.concurso)
   if (idx >= 0) hist[idx] = entry
   else hist.push(entry)
-  // mantemos só os últimos 10 registros
   write(K_HIST, hist.slice(-10))
+}
+
+// Resultado manual (local)
+export function getManualResult() {
+  return read(K_MANUAL, null)
+}
+export function saveManualResult(obj) {
+  // espera { numero, dataApuracao, dezenas: ["00","00","00","00","00","00"] }
+  write(K_MANUAL, obj)
+}
+export function clearManualResult() {
+  localStorage.removeItem(K_MANUAL)
 }
